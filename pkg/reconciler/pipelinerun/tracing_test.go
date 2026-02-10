@@ -85,6 +85,52 @@ func TestInitTracing(t *testing.T) {
 		tracerProvider:          trace.NewNoopTracerProvider(),
 		expectSpanContextStatus: false,
 		expectValidSpanContext:  false,
+	}, {
+		name: "with-delivery-traceparent-annotation",
+		pipelineRun: &v1.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "testns",
+				Annotations: map[string]string{
+					"tekton.dev/deliveryTraceparent": "00-0f57e147e992b304d977436289d10628-73d5909e31793992-01",
+				},
+			},
+		},
+		tracerProvider:          tracesdk.NewTracerProvider(),
+		expectSpanContextStatus: true,
+		expectValidSpanContext:  true,
+		parentTraceID:           "00-0f57e147e992b304d977436289d10628-73d5909e31793992-01",
+	}, {
+		name: "with-invalid-delivery-traceparent-annotation",
+		pipelineRun: &v1.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "testns",
+				Annotations: map[string]string{
+					"tekton.dev/deliveryTraceparent": "invalid-traceparent",
+				},
+			},
+		},
+		tracerProvider:          tracesdk.NewTracerProvider(),
+		expectSpanContextStatus: true,
+		expectValidSpanContext:  true,
+		// No parentTraceID - should create new root span due to invalid delivery traceparent
+	}, {
+		name: "pipelinerun-spancontext-takes-precedence-over-delivery-traceparent",
+		pipelineRun: &v1.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "testns",
+				Annotations: map[string]string{
+					"tekton.dev/pipelinerunSpanContext": "{\"traceparent\":\"00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1-bbbbbbbbbbbbbbbb-01\"}",
+					"tekton.dev/deliveryTraceparent":    "00-cccccccccccccccccccccccccccccc2-dddddddddddddddd-01",
+				},
+			},
+		},
+		tracerProvider:          tracesdk.NewTracerProvider(),
+		expectSpanContextStatus: true,
+		expectValidSpanContext:  true,
+		parentTraceID:           "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1-bbbbbbbbbbbbbbbb-01",
 	}}
 
 	for _, tc := range testcases {

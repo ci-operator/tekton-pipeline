@@ -31,3 +31,48 @@ The configmap `config/config-tracing.yaml` contains the configuration for tracin
 * enabled: Set this to true to enable tracing
 * endpoint: API endpoint for jaeger collector to send the traces. By default the endpoint is configured to be `http://jaeger-collector.jaeger.svc.cluster.local:14268/api/traces`.
 * credentialsSecret: Name of the secret which contains `username` and `password` to authenticate against the endpoint
+
+## External Parent Trace Context
+
+External systems can provide a parent trace context for PipelineRuns by setting
+the `tekton.dev/deliveryTraceparent` annotation to a valid [W3C Trace Context](https://www.w3.org/TR/trace-context/) traceparent string.
+
+When this annotation is present and valid, Tekton adopts it as the parent span
+instead of creating a new root span. This enables distributed tracing across
+system boundaries - for example, a CI/CD orchestrator can propagate its trace
+context to PipelineRuns it creates.
+
+### Example
+
+```yaml
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: my-pipelinerun
+  annotations:
+    tekton.dev/deliveryTraceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+spec:
+  pipelineRef:
+    name: my-pipeline
+```
+
+### Precedence Rules
+
+The trace context is determined in the following order:
+
+1. If `status.SpanContext` already exists, it is used (PipelineRun is already being traced)
+2. If `tekton.dev/pipelinerunSpanContext` annotation exists, it is used
+3. If `tekton.dev/deliveryTraceparent` annotation exists and is valid, it is adopted as the parent
+4. Otherwise, a new root span is created
+
+### Traceparent Format
+
+The traceparent must follow the W3C Trace Context format:
+`{version}-{trace-id}-{parent-id}-{flags}`
+
+Example: `00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01`
+
+- `version`: 2 hex digits (currently `00`)
+- `trace-id`: 32 hex digits
+- `parent-id`: 16 hex digits
+- `flags`: 2 hex digits (e.g., `01` for sampled)

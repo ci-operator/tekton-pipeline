@@ -36,8 +36,7 @@ const (
 	SpanContextAnnotation = "tekton.dev/pipelinerunSpanContext"
 	// TaskRunSpanContextAnnotation is the name of the Annotation used for propagating SpanContext to TaskRun
 	TaskRunSpanContextAnnotation = "tekton.dev/taskrunSpanContext"
-	// DeliveryTraceparentAnnotation is the name of the Annotation for an externally-provided
-	// W3C traceparent that should be adopted as the parent span when no execution parent exists
+	// DeliveryTraceparentAnnotation is the name of the Annotation for external parent trace context
 	DeliveryTraceparentAnnotation = "tekton.dev/deliveryTraceparent"
 )
 
@@ -65,21 +64,25 @@ func initTracing(ctx context.Context, tracerProvider trace.TracerProvider, pr *v
 		return pro.Extract(ctx, propagation.MapCarrier(pr.Status.SpanContext))
 	}
 
-	// Check for delivery traceparent annotation (external parent trace context)
+	// Create child span under external delivery traceparent
 	if pr.Annotations != nil && pr.Annotations[DeliveryTraceparentAnnotation] != "" {
 		deliveryTraceparent := pr.Annotations[DeliveryTraceparentAnnotation]
-		spanContext["traceparent"] = deliveryTraceparent
-		pr.Status.SpanContext = spanContext
-		extractedCtx := pro.Extract(ctx, propagation.MapCarrier(spanContext))
-		// Verify the extracted context has a valid span context
-		if trace.SpanContextFromContext(extractedCtx).IsValid() {
-			logger.Debugf("adopted delivery traceparent as parent: %s", deliveryTraceparent)
-			return extractedCtx
+		parentCarrier := map[string]string{"traceparent": deliveryTraceparent}
+		parentCtx := pro.Extract(ctx, propagation.MapCarrier(parentCarrier))
+		if !trace.SpanContextFromContext(parentCtx).IsValid() {
+			logger.Warnf("invalid delivery traceparent annotation value: %s", deliveryTraceparent)
+		} else {
+			ctxWithTrace, span := tracerProvider.Tracer(TracerName).Start(parentCtx, "PipelineRun:Reconciler")
+			defer span.End()
+			span.SetAttributes(attribute.String("pipelinerun", pr.Name), attribute.String("namespace", pr.Namespace))
+
+			pro.Inject(ctxWithTrace, propagation.MapCarrier(spanContext))
+
+			logger.Debugf("created child span under delivery traceparent: %s", deliveryTraceparent)
+			span.AddEvent("updating PipelineRun status with SpanContext")
+			pr.Status.SpanContext = spanContext
+			return ctxWithTrace
 		}
-		logger.Warnf("invalid delivery traceparent annotation value: %s", deliveryTraceparent)
-		// Clear invalid spanContext from status
-		pr.Status.SpanContext = nil
-		spanContext = make(map[string]string)
 	}
 
 	// Create a new root span since there was no parent spanContext provided through annotations

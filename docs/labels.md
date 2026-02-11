@@ -137,7 +137,7 @@ The following annotations are reserved for Tekton's internal use. Do not remove 
 		<tr>
 			<td><code>tekton.dev/pipelinerunSpanContext</code></td>
 			<td><code>PipelineRuns</code></td>
-			<td>JSON-encoded span context for trace propagation from external systems.</td>
+			<td>JSON-encoded span context for internal Tekton trace propagation. The span context is adopted directly without creating an intermediate span.</td>
 		</tr>
 		<tr>
 			<td><code>tekton.dev/taskrunSpanContext</code></td>
@@ -147,7 +147,7 @@ The following annotations are reserved for Tekton's internal use. Do not remove 
 		<tr>
 			<td><code>tekton.dev/deliveryTraceparent</code></td>
 			<td><code>PipelineRuns</code></td>
-			<td>W3C traceparent string for external parent trace context. When set with a valid traceparent, Tekton adopts it as the parent span for execution traces. See <a href="developers/tracing.md#external-parent-trace-context">tracing documentation</a> for details.</td>
+			<td>W3C traceparent string for external parent trace context. When set with a valid traceparent, Tekton creates a child span under the provided parent, making sibling PipelineRuns distinguishable in traces. See <a href="developers/tracing.md#external-parent-trace-context">tracing documentation</a> for details.</td>
 		</tr>
 	</tbody>
 </table>

@@ -14,6 +14,7 @@ limitations under the License.
 package pipelinerun
 
 import (
+	"strings"
 	"testing"
 
 	v1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
@@ -34,6 +35,8 @@ func TestInitTracing(t *testing.T) {
 		expectSpanContextStatus bool
 		expectValidSpanContext  bool
 		parentTraceID           string
+		parentTraceIDPrefix     string
+		parentSpanID            string
 	}{{
 		name: "with-tracerprovider-no-parent-trace",
 		pipelineRun: &v1.PipelineRun{
@@ -99,7 +102,8 @@ func TestInitTracing(t *testing.T) {
 		tracerProvider:          tracesdk.NewTracerProvider(),
 		expectSpanContextStatus: true,
 		expectValidSpanContext:  true,
-		parentTraceID:           "00-0f57e147e992b304d977436289d10628-73d5909e31793992-01",
+		parentTraceIDPrefix:     "00-0f57e147e992b304d977436289d10628-",
+		parentSpanID:            "73d5909e31793992",
 	}, {
 		name: "with-invalid-delivery-traceparent-annotation",
 		pipelineRun: &v1.PipelineRun{
@@ -114,7 +118,6 @@ func TestInitTracing(t *testing.T) {
 		tracerProvider:          tracesdk.NewTracerProvider(),
 		expectSpanContextStatus: true,
 		expectValidSpanContext:  true,
-		// No parentTraceID - should create new root span due to invalid delivery traceparent
 	}, {
 		name: "pipelinerun-spancontext-takes-precedence-over-delivery-traceparent",
 		pipelineRun: &v1.PipelineRun{
@@ -151,13 +154,25 @@ func TestInitTracing(t *testing.T) {
 					t.Fatalf("spanContext not added to annotations")
 				}
 
-				parentID := pr.Status.SpanContext["traceparent"]
-				if len(parentID) != 55 {
-					t.Errorf("invalid trace Id")
+				traceparent := pr.Status.SpanContext["traceparent"]
+				if len(traceparent) != 55 {
+					t.Errorf("invalid traceparent length: got %d, want 55", len(traceparent))
 				}
 
-				if tc.parentTraceID != "" && parentID != tc.parentTraceID {
-					t.Errorf("invalid trace Id propagated, %s", parentID)
+				if tc.parentTraceID != "" && traceparent != tc.parentTraceID {
+					t.Errorf("traceparent mismatch: got %s, want %s", traceparent, tc.parentTraceID)
+				}
+
+				if tc.parentTraceIDPrefix != "" {
+					if !strings.HasPrefix(traceparent, tc.parentTraceIDPrefix) {
+						t.Errorf("traceparent should have prefix %s, got %s", tc.parentTraceIDPrefix, traceparent)
+					}
+					if tc.parentSpanID != "" {
+						parts := strings.Split(traceparent, "-")
+						if len(parts) >= 3 && parts[2] == tc.parentSpanID {
+							t.Errorf("child span ID should differ from parent: %s", parts[2])
+						}
+					}
 				}
 			}
 		})

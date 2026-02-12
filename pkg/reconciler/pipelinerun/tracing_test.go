@@ -118,6 +118,29 @@ func TestInitTracing(t *testing.T) {
 		expectSpanContextStatus: true,
 		expectValidSpanContext:  true,
 	}, {
+		name: "status-spancontext-takes-precedence-over-both-annotations",
+		pipelineRun: &v1.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "testns",
+				Annotations: map[string]string{
+					"tekton.dev/pipelinerunSpanContext": "{\"traceparent\":\"00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1-bbbbbbbbbbbbbbbb-01\"}",
+					"tekton.dev/deliveryTraceparent":    "00-ccccccccccccccccccccccccccccccc2-dddddddddddddddd-01",
+				},
+			},
+			Status: v1.PipelineRunStatus{
+				PipelineRunStatusFields: v1.PipelineRunStatusFields{
+					SpanContext: map[string]string{
+						"traceparent": "00-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee3-ffffffffffffffff-01",
+					},
+				},
+			},
+		},
+		tracerProvider:          tracesdk.NewTracerProvider(),
+		expectSpanContextStatus: true,
+		expectValidSpanContext:  true,
+		parentTraceID:           "00-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee3-ffffffffffffffff-01",
+	}, {
 		name: "pipelinerun-spancontext-takes-precedence-over-delivery-traceparent",
 		pipelineRun: &v1.PipelineRun{
 			ObjectMeta: metav1.ObjectMeta{
@@ -125,7 +148,7 @@ func TestInitTracing(t *testing.T) {
 				Namespace: "testns",
 				Annotations: map[string]string{
 					"tekton.dev/pipelinerunSpanContext": "{\"traceparent\":\"00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1-bbbbbbbbbbbbbbbb-01\"}",
-					"tekton.dev/deliveryTraceparent":    "00-cccccccccccccccccccccccccccccc2-dddddddddddddddd-01",
+					"tekton.dev/deliveryTraceparent":    "00-ccccccccccccccccccccccccccccccc2-dddddddddddddddd-01",
 				},
 			},
 		},

@@ -64,7 +64,7 @@ func initTracing(ctx context.Context, tracerProvider trace.TracerProvider, pr *v
 		return pro.Extract(ctx, propagation.MapCarrier(pr.Status.SpanContext))
 	}
 
-	// Create child span under external delivery traceparent
+	// Adopt external delivery traceparent as remote parent
 	if pr.Annotations != nil && pr.Annotations[DeliveryTraceparentAnnotation] != "" {
 		deliveryTraceparent := pr.Annotations[DeliveryTraceparentAnnotation]
 		parentCarrier := map[string]string{"traceparent": deliveryTraceparent}
@@ -72,16 +72,11 @@ func initTracing(ctx context.Context, tracerProvider trace.TracerProvider, pr *v
 		if !trace.SpanContextFromContext(parentCtx).IsValid() {
 			logger.Warnf("invalid delivery traceparent annotation value: %s", deliveryTraceparent)
 		} else {
-			ctxWithTrace, span := tracerProvider.Tracer(TracerName).Start(parentCtx, "PipelineRun:Reconciler")
-			defer span.End()
-			span.SetAttributes(attribute.String("pipelinerun", pr.Name), attribute.String("namespace", pr.Namespace))
+			pro.Inject(parentCtx, propagation.MapCarrier(spanContext))
 
-			pro.Inject(ctxWithTrace, propagation.MapCarrier(spanContext))
-
-			logger.Debugf("created child span under delivery traceparent: %s", deliveryTraceparent)
-			span.AddEvent("updating PipelineRun status with SpanContext")
+			logger.Debugf("adopted delivery traceparent as remote parent: %s", deliveryTraceparent)
 			pr.Status.SpanContext = spanContext
-			return ctxWithTrace
+			return parentCtx
 		}
 	}
 

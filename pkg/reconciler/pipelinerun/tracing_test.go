@@ -102,8 +102,7 @@ func TestInitTracing(t *testing.T) {
 		tracerProvider:          tracesdk.NewTracerProvider(),
 		expectSpanContextStatus: true,
 		expectValidSpanContext:  true,
-		parentTraceIDPrefix:     "00-0f57e147e992b304d977436289d10628-",
-		parentSpanID:            "73d5909e31793992",
+		parentTraceID:           "00-0f57e147e992b304d977436289d10628-73d5909e31793992-01",
 	}, {
 		name: "with-invalid-delivery-traceparent-annotation",
 		pipelineRun: &v1.PipelineRun{
